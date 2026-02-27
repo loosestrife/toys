@@ -18,8 +18,8 @@ var repl = require('repl');
 var fs = require('fs');
 var path = require('path');
 
-var httpPort = 80;
-var httpsPort = 443;
+var httpPort = process.env.HTTP_PORT || 80;
+var httpsPort = process.env.HTTPS_PORT || 443;
 
 __dirname = process.cwd()+"/";
 const toysDir = process.cwd().split('/').slice(0,-1).join('/') + '/';
