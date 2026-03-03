@@ -5,7 +5,17 @@
 </title>
 <script type="text/javascript">
 'use strict';
-const SCREEN_RADIUS=256;
+// TODO:
+// * make the view wrap
+// * makes waves bounce off stars
+// * make fish spawn waves
+// * jellyfish with tentacles
+// * waves interact with objects
+
+const VIEWPORT_WIDTH = 512;
+const SPACE_WIDTH = 4096;
+let PHYSICS_WIDTH = 1024;
+const DOWNSAMPLE_WIDTH = 512;
 const USE_WEBGL=true;
 const USE_WAVE=true;
 let gl;
@@ -20,26 +30,39 @@ const sprites = {};
 const shapes = {};
 const wave = {};
 const space = {
-  size: 2*Math.pow(10,10),
-  viewsize: Math.pow(10,10),
+  size: SPACE_WIDTH/2,
+  viewsize: VIEWPORT_WIDTH/2,
   color: "rgb(0,0,0)",
   scrollable: true,
   wrap: true
 };
 const viewFraction = space.viewsize/space.size;
-const centerx = SCREEN_RADIUS;
-const centery = SCREEN_RADIUS;
+let centerx = VIEWPORT_WIDTH/2;
+let centery = VIEWPORT_WIDTH/2;
 var xoff=0;
 var yoff=0;
-const ptogl = (px,py)=> [px/space.viewsize-xoff, py/space.viewsize-yoff];
+const ptogl = (px,py)=> {
+  let cx = xoff*space.viewsize;
+  let cy = yoff*space.viewsize;
+  let dx = px - cx;
+  let dy = py - cy;
+  if(space.wrap){
+    const sz = 2*space.size;
+    while(dx < -space.size) dx += sz;
+    while(dx > space.size) dx -= sz;
+    while(dy < -space.size) dy += sz;
+    while(dy > space.size) dy -= sz;
+  }
+  return [dx/space.viewsize, dy/space.viewsize];
+};
 const ptowave = (px,py)=>[px/space.size, py/space.size];
-const scrtogl = (sx,sy)=>[1-sx/SCREEN_RADIUS, sy/SCREEN_RADIUS-1];
+const scrtogl = (sx,sy)=>[1-sx/(VIEWPORT_WIDTH/2), sy/(VIEWPORT_WIDTH/2)-1];
 const scrtowave = (sx,sy)=>{
-  const res = [(1-sx/SCREEN_RADIUS+xoff)*viewFraction,(sy/SCREEN_RADIUS-1+yoff)*viewFraction];
+  const res = [(1-sx/(VIEWPORT_WIDTH/2)+xoff)*viewFraction,(sy/(VIEWPORT_WIDTH/2)-1+yoff)*viewFraction];
   console.log([sx,sy],[xoff,yoff],'->',res);
   return res;
 };
-const mtopix = SCREEN_RADIUS/space.viewsize;
+const mtopix = (VIEWPORT_WIDTH/2)/space.viewsize;
 const mtogl = 1/space.viewsize;
 const mtowave = 1/space.size;
 
@@ -72,6 +95,9 @@ const loadShaders = async (sobj) => {
   const sources = {};
   const getSource = async (location)=>{
     const res = await fetch(location);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch shader ${location}: ${res.status} ${res.statusText}`);
+    }
     sources[location] = await res.text();
   };
   const sourcePromises = [];
@@ -159,17 +185,21 @@ const makeTextures = async (name, pRes) => {
     }
   }
   pRes();
+  document.body.removeChild(offscreen_canvas);
 }
 
 loadShaders({
   simple: ["shaders/simple2d.vert","shaders/simple.frag"],
   ellipse: ["/shaders/sprite2d.vert","/shaders/circle.frag"],
+  flat: ["/shaders/sprite2d.vert","/shaders/simple.frag"],
   sprite: ["shaders/sprite2d.vert","shaders/sprite.frag"],
-  gaussian: ["shaders/sprite2d.vert", "shaders/gaussian.frag"],
-  wave_sim: ["shaders/sprite2d.vert", "shaders/wave.frag"],
+  waveic: ["shaders/sprite2d.vert", "shaders/wave_initial_condition.frag"],
+  wave_sim: ["shaders/sprite2d.vert", "shaders/space_wave.frag"],
   wave_display: ["shaders/sprite2d.vert", "shaders/space_wave_display.frag"],
   wave_effect: ["shaders/sprite2d.vert", "shaders/wave_effect.frag"],
   reduce: ["shaders/sprite2d.vert", "shaders/reduce.frag"],
+  nebula: ["/shaders/sprite2d.vert", "/shaders/nebula.frag"],
+  gravity: ["/shaders/sprite2d.vert", "/shaders/gravity.frag"],
 });
 loadSprites({
   turtle: {src: "turtlepond/turtle512.png"},
@@ -227,24 +257,30 @@ const keyup = function(e){
 //////////////////////////// initialization
 const debugTable = [];
 const debugTableTds = [];
-const debugTableValues = (rs) => rs.forEach((r,i)=>r.forEach((cell,j)=>debugTableTds[i][j].textContent = cell));
+const debugTableValues = (rs) => rs.forEach((r,i)=>i<debugTableTds.length && r.forEach((cell,j)=>debugTableTds[i][j].textContent = typeof cell == 'number' ? cell.toFixed(2) : cell));
 let debug2dCtx;
 window.onload = async () => {
-  const trs = [];
-  for(let i=0; i<15; i++){
-    const l = [];
-    debugTableTds.push(l);
-    for(let j=0; j<5; j++){
-      l.push(hml.td({style: 'width: 180px; text-align: right;'}));
+  {
+    const debugDiv = hml.div({id:'debug'})
+    const trs = [];
+    for(let i=0; i<15; i++){
+      const l = [];
+      debugTableTds.push(l);
+      for(let j=0; j<5; j++){
+        l.push(hml.td({style: 'width: 180px; text-align: right;'}));
+      }
+      trs.push(hml.tr(l));
     }
-    trs.push(hml.tr(l));
+    debugDiv.appendChild(hml.table(trs));
+    const debugCanvas = hml.canvas({id:'debugCanvas', width:512, height:512})
+    //debugDiv.appendChild(debugCanvas);
+    debug2dCtx = debugCanvas.getContext('2d');
+    //document.body.appendChild(debugDiv);
   }
-  document.body.appendChild(hml.table(trs));
-  document.body.appendChild(hml.div({id:'debug'}));
   const canvas = hml.canvas({
     id:'screen',
-    width: SCREEN_RADIUS*2,
-    height: SCREEN_RADIUS*2,
+    width: VIEWPORT_WIDTH,
+    height: VIEWPORT_WIDTH,
     onkeydown: keydown,
     onkeyup: keyup,
     onblur: pause,
@@ -254,8 +290,6 @@ window.onload = async () => {
   });
   document.body.appendChild(canvas);
   canvas.focus();
-  document.body.appendChild(hml.canvas({id:'canvas2d', width:512, height:512}));
-  debug2dCtx = document.getElementById('canvas2d').getContext('2d');
   const controls = [
     {id: 'counterclockwise', default: 'L'},
     {id: 'retrograde', default: 'J'},
@@ -290,6 +324,12 @@ window.onload = async () => {
   if(USE_WEBGL){
     gl = document.getElementById('screen').getContext('webgl');
     gl.getExtension("OES_texture_float");
+    gl.getExtension("OES_standard_derivatives");
+    const maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+    if(PHYSICS_WIDTH > maxTexSize){
+      console.warn(`PHYSICS_WIDTH ${PHYSICS_WIDTH} exceeds device limit ${maxTexSize}. Clamping.`);
+      PHYSICS_WIDTH = maxTexSize;
+    }
     glPromiseRes();
     await Promise.all([shaderPromise,spritePromise]);
     generateGlObjs();
@@ -333,26 +373,24 @@ var generateGlObjs = function(){
   gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(data),gl.STATIC_DRAW);
 
   // make waves
-  var txx = ["c","n","o","r0","r1","rout"];
+  var txx = ["c","n","o","r0","r1","rout","g", "nebula"];
   for(var i=0; i<txx.length; i++){
     wave[txx[i]] = {};
     var w = wave[txx[i]];
     w.fbuf = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, w.fbuf);
-    w.fbuf.width = SCREEN_RADIUS*2;
-    w.fbuf.height = SCREEN_RADIUS*2;
+    w.fbuf.width = PHYSICS_WIDTH;
+    w.fbuf.height = PHYSICS_WIDTH;
     w.tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D,w.tex);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-//    gl.texParameterfv(gl.TEXTURE_2D, gl.TEXTURE_BORDER_COLOR, [0,0,0,0]);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    if(txx[i] != "o"){
-      var ttype = gl.FLOAT;
-    } else {
+    if(txx[i] === 'o' || txx[i] === 'nebula'){
       var ttype = gl.UNSIGNED_BYTE;
+    } else {
+      var ttype = gl.FLOAT;
     }
     gl.texImage2D(gl.TEXTURE_2D,
       0, gl.RGBA, w.fbuf.width, w.fbuf.height,
@@ -374,22 +412,22 @@ var generateGlObjs = function(){
   }
 }
 
-const G = 6.67300 * Math.pow(10,-11);
+const G = 100;
 // all values are mks and are supposed to represent the sun-mercury system
 const sol = {
-  m: 1.98892 * Math.pow(10,30),
-  r: 6.955*Math.pow(10,8),
+  m: 100000,
+  r: 40,
   x: 0,
   y: 0
 }
 sol.r2 = sol.r*sol.r;
 const mercury = {
-  m: 3.30200 * Math.pow(10,27),
-  x: 6.98169 * Math.pow(10,9),
-  r: 2.4397*Math.pow(10,8), //100x actual
+  m: 100,
+  x: 300,
+  r: 15, //100x actual
   y: 0,
   xdot: 0,
-  ydot: 1.2 * Math.pow(10,5) //this is completely made up
+  ydot: Math.sqrt(G * sol.m / 300) //this is completely made up
 }
 mercury.r2 = mercury.r*mercury.r;
 
@@ -509,7 +547,7 @@ var xy_away_from_stars = function(){
 
     for(var i=0; i<typelists.celestial.length; i++){
       var d = Math.sqrt(Math.pow(typelists.celestial[i].x - x,2)+Math.pow(typelists.celestial[i].y - y,2))
-      if(d<5*Math.pow(10,9)){
+      if(d<200){
         collide = true;
         continue;
       }
@@ -524,18 +562,67 @@ var get_dist = function(o1,o2){
   return Math.sqrt(xd*xd+yd*yd);
 }
 
-for(var i=0; i<10; i++){
+const generateStar = (override = {}) => {
+  const m_rand = override.m_rand !== undefined ? override.m_rand : Math.random();
+  let isPulsar = override.isPulsar;
+
+  let m, r, color;
+  let data = {};
+  if (m_rand < 0.1) { // white dwarf
+    m = 0.3; // white dwarf mass
+    r = (m + 0.05) * 5; // smaller radius
+    color = [0.8, 0.9, 1.0, 1.0]; // white dwarf color
+    data.nebula = true; // White dwarfs are remnants, so they get a nebula
+    if (isPulsar === undefined) {
+        isPulsar = Math.random() < 0.5;
+    }
+    if (isPulsar) {
+      data.pulsar = true;
+      data.orientation = Math.random() * 2 * Math.PI;
+      data.rotationSpeed = (Math.random() - 0.5) * 2;
+      data.rotationSpeed += Math.sign(data.rotationSpeed);
+    }
+  } else if (m_rand < .3) { // red dwarf
+    m = m_rand;
+    r = (m + 0.2) * 10;
+    color = [1.0, 0.5, 0.1, 1.0];
+  } else if (m_rand < .8){
+    m = m_rand;
+    r = (m + 0.2) * 20;
+    color = [.7, 1.0, .4, 1.0];
+  } else if (m_rand < .9){
+    m = m_rand;
+    r = (m + 0.2) * 20;
+    color = [0.2, 0.8, 1.0, 1.0]; // blue giant
+  } else {
+    m = m_rand;
+    r = (m + 0.2) * 30;
+    color = [1.0, 0.5, 0.1, 1.0] // red supergiant
+  }
   make_game_object({
-    m: Math.random()*Math.pow(10,30),
-    r: (Math.random()+.2)*5*Math.pow(10,8),
+    m,
+    r,
     pos: "away_from_stars",
-    color: "rgb(200,255,100)",
+    color,
     type: "celestial",
-    flags: ["gravitating"]
+    flags: ["gravitating"],
+    ...data
   });
+};
+
+// Ensure at least one of each type
+generateStar({ m_rand: 0.05, isPulsar: true }); // Pulsar
+generateStar({ m_rand: 0.05, isPulsar: false }); // White Dwarf
+generateStar({ m_rand: 0.2 }); // Red Dwarf
+generateStar({ m_rand: 0.5 }); // Yellow-ish
+generateStar({ m_rand: 0.85 }); // Blue Giant
+generateStar({ m_rand: 0.95 }); // Red Supergiant
+
+for(var i=0; i<14; i++){
+  generateStar();
 }
 
-const shipr = 5*Math.pow(10,8);
+const shipr = 15;
 var ship = make_game_object({
   pos: "away_from_stars",
   vel: "stationary",
@@ -543,58 +630,60 @@ var ship = make_game_object({
   orientation: 0,
   ar: .7,
   shape: [6,0,-2,4,-2,-4,-2,0],
-  thruster: Math.pow(10,6),
-  max_speed: Math.pow(10,6),
+  thruster: 100,
+  max_speed: 400,
   vernier: Math.PI/2,
-  blasterspeed: 3*Math.pow(10,5),
+  blasterspeed: 600,
   blasterttl: 300,
-  tractorbeam: 3*Math.pow(10,3),
+  tractorbeam: 100,
   drawtype: "sprite",
   sprite: "turtle",
   type: "ship",
   flags: ["shootable", "gravitated", "collides_with_stars"],
   legs: [
     {
-      attachx: 1/2*shipr,
-      attachy: 1/6*shipr,
+      attachx: 1/6*shipr,
+      attachy: 1/2*shipr,
       leglen:  1/3*shipr,
-      sorientation: 0,
-      strokephase: Math.random()*2*Math.PI,
-      color: [0,1,0,1],
-    },
-    {attachx: -1/2*shipr,
-      attachy: 1/6*shipr,
-      leglen:  1/3*shipr,
-      sorientation: Math.PI,
-      strokephase: Math.random()*2*Math.PI,
-      color: [0,1,0,1],
-    },
-    {attachx: -1/2*shipr,
-      attachy: -5/6*shipr,
-      leglen:  1/3*shipr,
-      sorientation: Math.PI,
-      strokephase: Math.random()*2*Math.PI,
+      stdorientation: 1/2*Math.PI - 0.3,
+      strokephase: 0*2*Math.PI,
       color: [0,1,0,1],
     },
     {
-      attachx: 1/2*shipr,
-      attachy: -5/6*shipr,
+      attachx: 1/6*shipr,
+      attachy: -1/2*shipr,
       leglen:  1/3*shipr,
-      sorientation: 0,
-      strokephase: Math.random()*2*Math.PI,
+      stdorientation: 3/2*Math.PI + 0.3,
+      strokephase: .2*2*Math.PI,
+      color: [0,1,0,1],
+    },
+    {
+      attachx: -5/6*shipr,
+      attachy: -1/2*shipr,
+      leglen:  1/3*shipr,
+      stdorientation: 3/2*Math.PI - 0.6,
+      strokephase: .4*2*Math.PI,
+      color: [0,1,0,1],
+    },
+    {
+      attachx: -5/6*shipr,
+      attachy: 1/2*shipr,
+      leglen:  1/3*shipr,
+      stdorientation: 1/2*Math.PI + 0.6,
+      strokephase: .6*2*Math.PI,
       color: [0,1,0,1],
     }]
 });
 
-for(var i=0; i<10; i++){
+for(var i=0; i<40; i++){
   var o = Math.random()*2*Math.PI;
-  var v = -5*Math.pow(10,5);
+  var v = -100;
   make_game_object({
     pos: "away_from_stars",
     vel: [Math.cos(o)*v,-Math.sin(o)*v],
-    r: 5*Math.pow(10,8),
+    r: 10,
     orientation: o,
-    thruster: 5*Math.pow(10,3),
+    thruster: 100,
     max_speed: Math.abs(v),
     type: "npc",
     drawtype: "sprite",
@@ -606,12 +695,12 @@ for(var i=0; i<10; i++){
 }
 
 var makeasteroid = function(e){
-  var speed = Math.random()*100000;
+  var speed = Math.random()*100;
   var dir = Math.random()*2*Math.PI;
   make_game_object({
     pos: "away_from_stars",
     vel: [speed*Math.cos(dir), speed*Math.sin(dir)],
-    r: Math.pow(10,8),
+    r: 10,
     drawtype: "shape",
     shape: "circle",
     color: "rgb(50,50,0)",
@@ -622,7 +711,7 @@ var makeasteroid = function(e){
 
 var tractorbeamtarget = null;
 var dophysics = function(){
-  const tickseconds = 1000*ticklen;
+  const tickseconds = ticklen;
   //motion
   for(var i=0; i<stuff.gravitated.length; i++){
     var thing = stuff.gravitated[i];
@@ -631,6 +720,8 @@ var dophysics = function(){
       thing.xdot *= thing.max_speed/speed;
       thing.ydot *= thing.max_speed/speed;
     }
+    thing.xdot *= (1 - 0.5 * tickseconds);
+    thing.ydot *= (1 - 0.5 * tickseconds);
     thing.x = thing.x + thing.xdot*tickseconds;
     thing.y = thing.y + thing.ydot*tickseconds;
     for(var j=0; j<stuff.gravitating.length; j++){
@@ -650,96 +741,53 @@ var dophysics = function(){
       thing.xdot = thing.xdot + ax*tickseconds;
       thing.ydot = thing.ydot + ay*tickseconds;
     }
-    var floatArray = new Float32Array(SCREEN_RADIUS*SCREEN_RADIUS*4);
+  }
+  if(stuff.gravitated.length > 0){
+    if(!window.waveReadBuffer) window.waveReadBuffer = new Float32Array(PHYSICS_WIDTH*PHYSICS_WIDTH*4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, wave.c.fbuf);
+    gl.readPixels(0, 0, PHYSICS_WIDTH, PHYSICS_WIDTH, gl.RGBA, gl.FLOAT, window.waveReadBuffer);
+  }
+  for(var i=0; i<stuff.gravitated.length; i++){
+    var thing = stuff.gravitated[i];
     const [wavex,wavey] = ptowave(thing.x,thing.y);
     const waver = thing.r*mtowave*4;
-    /* using the gpu for this was slow
-    if(thing.sprite == 'turtle'){
-    let buf0 = wave.r0;
-    let buf1 = wave.r1;
-    const swapbuf = () => {
-      const tmp = buf0;
-      buf0 = buf1;
-      buf1 = tmp;
-    };
-    gl.bindFramebuffer(gl.FRAMEBUFFER, buf1.fbuf);
-    gl.clearColor(0,0,0,1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    let program = sprogram.wave_effect;
-    gl.useProgram(program.program);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D,wave.c.tex);
-    gl.uniform1i(program.u_wave,1);
-    gl.uniform1f(program.u_pxc, SCREEN_RADIUS*2);
-    gl.uniform1f(program.u_shrink, 1/2);
-    gl.uniform2fv(program.u_location, [-wavex/2+.5, -wavey/2+.5]);
-    drawsprite(thing.sprite, waver, thing.orientation, thing.ar||1, wavex, wavey, thing.animphase || 0, sprogram.wave_effect);
-    swapbuf();
     
-    program = sprogram.reduce;
-    gl.useProgram(program.program);
-    for(i=0;i<Math.log2(SCREEN_RADIUS)+1;i++){
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, buf0.tex);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, buf1.fbuf);
-      paintScreen(program);
-      swapbuf();
-      gl.bindTexture(gl.TEXTURE_2D, buf0.tex);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      paintScreen(sprogram.sprite);
-    }
+    const pixx = (wavex+1)*PHYSICS_WIDTH/2;
+    const pixy = (wavey+1)*PHYSICS_WIDTH/2;
+    const pixr = Math.min(2*Math.round(waver * PHYSICS_WIDTH/4)+1, PHYSICS_WIDTH);
     
-    gl.bindFramebuffer(gl.FRAMEBUFFER, buf0.fbuf);
-    gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,floatArray);
-    debugTable.push([thing.sprite, floatArray[0], floatArray[1], floatArray[2], floatArray[3]]);
-    }
-    */
-    const pixx = (-wavex+1)*SCREEN_RADIUS;
-    const pixy = (-wavey+1)*SCREEN_RADIUS;
-    const pixr = 2*Math.round(waver * SCREEN_RADIUS/2)+1;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, wave.c.fbuf);
-    gl.readPixels(pixx-pixr/2,pixy-pixr/2,pixr,pixr,gl.RGBA,gl.FLOAT,floatArray);
-    const debugArray = new Uint8ClampedArray(pixr*pixr*4);
-    for(let j=0; j<pixr*pixr; j++){
-      for(let k=0; k<4; k++){
-        debugArray[j*4+k] = floatArray[j*4+k] * 256;
-      }
-    }
-    if(thing.sprite == 'turtle'){
-      debugTable.push([pixr,wavex,wavey,pixx,pixy]);
-      const id = new ImageData(debugArray, pixr);
-      debug2dCtx.putImageData(id, 0, 0);
-    }
+    const readX = Math.floor(pixx-pixr/2);
+    const readY = Math.floor(pixy - pixr/2);
+    
     let accx = 0;
     let accy = 0;
-    const kerR = pixr/2-1/2;
+    const kerR = pixr/2;
     for(let j=0; j<pixr; j++){
+      const globalY = readY + j;
+      if(globalY < 0 || globalY >= PHYSICS_WIDTH) continue;
       for(let k=0; k<pixr; k++){
-        const b=floatArray[(j*pixr+k)*4+2];
-        const nj = j-kerR;
-        const nk = k-kerR;
-        const ns = Math.sqrt(nj*nj+nk*nk);
-        const nn = ns!=0?1/ns:0;
-        const nx = nk * nn;
-        const ny = nj * nn;
-        if(b>.5){
-          accx += nx*b;
-          accy += ny*b;
-        }
-        //accx += b;
-        //accy += ny*b;
+        const globalX = readX + k;
+        if(globalX < 0 || globalX >= PHYSICS_WIDTH) continue;
+        const b = window.waveReadBuffer[(globalY*PHYSICS_WIDTH+globalX)*4+2];
+        const u = b - 0.5;
+        const nx = (k - kerR)/kerR;
+        const ny = (j - kerR)/kerR;
+        if(nx*nx + ny*ny > 1) continue;
+        accx += nx*u;
+        accy += ny*u;
       }
     }
-    thing.xdot += -accx * 2*Math.pow(10,3) * ticklen;
-    thing.ydot += -accy * 2*Math.pow(10,3) * ticklen;
-    debugTable.push([thing.sprite, wavex, wavey, accx, accy]);
+    thing.xdot += -accx * 20 * ticklen;
+    thing.ydot += -accy * 20 * ticklen;
+    if(thing.sprite == 'turtle'){
+      debugTable.push([thing.sprite, wavex.toFixed(2), wavey.toFixed(2), accx.toFixed(2), accy.toFixed(2)]);
+    }
   }
-  /*
   const npcValues = stuff.animated.map(n=>[n.sprite, n.x, n.y, n.xdot, n.ydot]);
   debugTableValues([
     [ship.sprite, ship.x,ship.y,ship.xdot,ship.ydot],
     ...npcValues
-  ]);*/
+  ]);
   //input
   const controlMatrix = {
     counterclockwise: ()=>{
@@ -749,8 +797,8 @@ var dophysics = function(){
       ship.orientation -= ship.vernier*ticklen;
     },
     thruster: ()=>{
-      ship.xdot -= ship.thruster*Math.cos(ship.orientation)*ticklen;
-      ship.ydot += ship.thruster*Math.sin(ship.orientation)*ticklen;
+      ship.xdot += ship.thruster*Math.cos(ship.orientation)*ticklen;
+      ship.ydot -= ship.thruster*Math.sin(ship.orientation)*ticklen;
     },
     tractorbeam: ()=>{
       if(tractorbeamtarget != null){
@@ -800,9 +848,16 @@ var dophysics = function(){
   // fish go in their direction
   stuff.gravitated.forEach(thing => {
     if(thing.sprite == 'fish'){
-      thing.orientation = -Math.atan2(thing.ydot, thing.xdot) + Math.PI;
+      thing.orientation = -Math.atan2(thing.ydot, thing.xdot);
     }
   })
+
+  // Animate pulsars
+  typelists.celestial.forEach(star => {
+      if (star.pulsar) {
+          star.orientation += star.rotationSpeed * ticklen;
+      }
+  });
 
   // turtle eats edible stuff
   stuff.edible.forEach(food => {
@@ -816,14 +871,15 @@ var dophysics = function(){
   for(const leg of ship.legs){
     leg.strokephase += (keysdown.includes('thruster')?2:.5)*(Math.random()/5 + 4/5)*5*ticklen;
     if(leg.strokephase > 2*Math.PI){
+      const wiggle = (leg.stdorientation > Math.PI ? -1 : 1) * 1/3 * Math.cos(leg.strokephase);
+      const orientation = leg.stdorientation + wiggle;
+      var offx = leg.attachx - 2*leg.leglen + Math.cos(orientation)*leg.leglen;
+      var offy = leg.attachy + Math.sin(orientation)*leg.leglen;
       var c = Math.cos(ship.orientation);
       var s = Math.sin(ship.orientation);
-      const orientation = leg.sorientation + 1/3*Math.cos(leg.strokephase);
-      var offx = leg.attachx + Math.cos(orientation)*leg.leglen;
-      var offy = leg.attachy + Math.sin(orientation)*leg.leglen;
-      var tipx = ship.x+ c*offx - s*offy;
-      var tipy = ship.y+ s*offx + c*offy;
-      makeWave("physics",tipx,tipy,8,1);
+      var tipx = ship.x + c*offx + s*offy;
+      var tipy = ship.y - s*offx + c*offy;
+      makeWave("physics",tipx,tipy,5,.7);
       //debugTable.push(['tip',...ptowave(tipx,tipy),tipx,tipy]);
     }
     leg.strokephase %= 2*Math.PI;
@@ -831,8 +887,14 @@ var dophysics = function(){
 
   // animate animated stuff
   for(var i=0; i<stuff.animated.length; i++){
-    stuff.animated[i].animphase += ticklen*2*Math.PI/stuff.animated[i].animtime;
-    stuff.animated[i].animphase %= 2*Math.PI;
+    const thing = stuff.animated[i];
+    const oldPhase = thing.animphase;
+    thing.animphase += ticklen*2*Math.PI/thing.animtime;
+    thing.animphase %= 2*Math.PI;
+    if(thing.sprite == 'fish' && thing.animphase < oldPhase){
+      const speed = Math.sqrt(thing.xdot*thing.xdot + thing.ydot*thing.ydot);
+      makeWave("physics", thing.x + Math.cos(thing.orientation+Math.PI)*thing.r*4, thing.y - Math.sin(thing.orientation+Math.PI)*thing.r*4,8,1);
+    }
   }
 
   if(USE_WAVE){
@@ -842,8 +904,13 @@ var dophysics = function(){
     gl.useProgram(sprogram.wave_sim.program);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D,wave.c.tex);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D,wave.g.tex);
     gl.uniform1i(sprogram.wave_sim.u_u,0);
-    gl.uniform1f(sprogram.wave_sim.u_tick,.05);
+    gl.uniform1i(sprogram.wave_sim.u_gravity, 1);
+    const BASE_PHYSICS_WIDTH = 512.0;
+    const dt_scale = BASE_PHYSICS_WIDTH / wave.c.fbuf.width;
+    gl.uniform1f(sprogram.wave_sim.u_dt_scale, dt_scale);
     gl.uniform1f(sprogram.wave_sim.u_pxc,wave.c.fbuf.width);
     paintScreen(sprogram.wave_sim);
     // copy n to c	
@@ -852,6 +919,7 @@ var dophysics = function(){
     const program = sprogram.sprite;
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D,wave.n.tex);
+    
     gl.uniform1i(program.u_tex,0);
     paintScreen(sprogram.sprite);
   }
@@ -923,10 +991,16 @@ var gl_drawstuff = function(){
 
   // foreground celestials
   for(var i=0; i<typelists.celestial.length; i++)
-    drawshape("circle",[.8,1,.3,1],typelists.celestial[i].r*mtogl, 0,
-      ...ptogl(typelists.celestial[i].x,typelists.celestial[i].y)
-    );
-
+  {
+    const star = typelists.celestial[i];
+    const [glx, gly] = ptogl(star.x, star.y);
+    if (star.pulsar) {
+        const beamColor = [0.9, 0.9, 1.0, 0.5]; // Faint white
+        const beamLength = 4000 * mtogl;
+        drawshape("square", beamColor, beamLength, star.orientation, glx, gly, 1/8_000_000);
+    }
+    drawshape("square",star.color,star.r*mtogl, 0, glx, gly);
+  }
 
   // asteroids
   for(var i=0; i<typelists.asteroid.length; i++)
@@ -947,19 +1021,22 @@ var gl_drawstuff = function(){
   // ship legs
   let program = sprogram.ellipse;
   gl.useProgram(program.program);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   gl.bindBuffer(gl.ARRAY_BUFFER,shapes.square.buf);
   gl.enableVertexAttribArray(program.a_vertex);
   gl.vertexAttribPointer(program.a_vertex, 2, gl.FLOAT, false, 0, 0);
-  var c = Math.cos(ship.orientation-Math.PI/2);
-  var s = Math.sin(ship.orientation-Math.PI/2);
+  var c = Math.cos(ship.orientation);
+  var s = Math.sin(ship.orientation);
   for(const leg of ship.legs){
-    const orientation = leg.sorientation + 1/3*Math.cos(leg.strokephase);
+    const wiggle = (leg.stdorientation > Math.PI ? -1 : 1) * 1/3 * Math.cos(leg.strokephase);
+    const orientation = leg.stdorientation + wiggle;
     var midx = leg.attachx + 1/2*Math.cos(orientation)*leg.leglen;
     var midy = leg.attachy + 1/2*Math.sin(orientation)*leg.leglen;
     var spacex =  c*midx + s*midy;
     var spacey = -s*midx + c*midy;
     gl.uniform2fv(program.u_xyoffset,[spacex*mtogl,spacey*mtogl]);
-    gl.uniform1f(program.u_orientation,ship.orientation-orientation);
+    gl.uniform1f(program.u_orientation,ship.orientation-orientation-Math.PI/2);
     gl.uniform1f(program.u_scale,leg.leglen*mtogl);
     gl.uniform1f(program.u_ar,1.5);
     gl.uniform4fv(program.u_color,[0,1,0,1]);
@@ -970,7 +1047,7 @@ var gl_drawstuff = function(){
   // post-processing
   if(USE_WAVE){
     gl.bindFramebuffer(gl.FRAMEBUFFER,null);
-    gl.viewport(0,0,SCREEN_RADIUS*2,SCREEN_RADIUS*2);
+    gl.viewport(0,0,VIEWPORT_WIDTH,VIEWPORT_WIDTH);
 	gl.clearColor(0,0,0,1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	
@@ -997,10 +1074,18 @@ var gl_drawstuff = function(){
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D,wave.o.tex);
     gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D,wave.c.tex/*sprites.turtle.tex[0]*/);
+    gl.bindTexture(gl.TEXTURE_2D,wave.c.tex);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D,wave.g.tex);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D,wave.nebula.tex);
     gl.uniform1i(program.u_fb,0);
     gl.uniform1i(program.u_wave,1);
-    gl.uniform2fv(program.u_viewOffset, [-ship.x/space.size/viewFraction/2+1/2,-ship.y/space.size/viewFraction/2+1/2]);
+    gl.uniform1i(program.u_gravity,2);
+    gl.uniform1i(program.u_nebula,3);
+    const offsetx = (0.5 * ship.x / space.size + 0.5) / viewFraction - 0.5;
+    const offsety = (0.5 * ship.y / space.size + 0.5) / viewFraction - 0.5;
+    gl.uniform2fv(program.u_viewOffset, [offsetx, offsety]);
     gl.uniform1f(program.u_viewScale, viewFraction);
 
     gl.bindBuffer(gl.ARRAY_BUFFER,shapes.square.buf);
@@ -1035,25 +1120,106 @@ var gl_drawstuff = function(){
   }
 }
 
+const renderGravityMap = () => {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, wave.g.fbuf);
+  gl.viewport(0,0,wave.g.fbuf.width, wave.g.fbuf.height);
+  gl.clearColor(0,0,0,1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  
+  // Additive blending to sum up potentials
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.ONE, gl.ONE);
+  
+  const program = sprogram.gravity;
+  gl.useProgram(program.program);
+  gl.bindBuffer(gl.ARRAY_BUFFER, shapes.square.buf);
+  gl.enableVertexAttribArray(program.a_vertex);
+  gl.vertexAttribPointer(program.a_vertex, 2, gl.FLOAT, false, 0, 0);
+  
+  // Standard vertex shader uniforms
+  gl.uniform1f(program.u_orientation, 0);
+  gl.uniform1f(program.u_scale, 1);
+  gl.uniform1f(program.u_ar, 1);
+  gl.uniform2fv(program.u_xyoffset, [0,0]);
+  
+  for(const star of typelists.celestial){
+      // Map star position from [-space.size, space.size] to [0, 1]
+      let cx = (star.x / space.size + 1.0) / 2.0;
+      let cy = (star.y / space.size + 1.0) / 2.0;
+      let r = star.r / (2.0 * space.size);
+      
+      gl.uniform2fv(program.u_center, [cx, cy]);
+      gl.uniform1f(program.u_radius, r);
+      gl.uniform1f(program.u_strength, star.m * 0.05); 
+      
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+  gl.disable(gl.BLEND);
+};
+
+const renderNebulaMap = () => {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, wave.nebula.fbuf);
+  gl.viewport(0,0,wave.nebula.fbuf.width, wave.nebula.fbuf.height);
+  gl.clearColor(0,0,0,1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.ONE, gl.ONE); // Additive blending
+  
+  const program = sprogram.nebula;
+  gl.useProgram(program.program);
+  gl.bindBuffer(gl.ARRAY_BUFFER, shapes.square.buf);
+  gl.enableVertexAttribArray(program.a_vertex);
+  gl.vertexAttribPointer(program.a_vertex, 2, gl.FLOAT, false, 0, 0);
+  
+  for(const star of typelists.celestial){
+    if (star.nebula){
+      const [glx, gly] = ptowave(star.x, star.y);
+      const glr = star.r / space.size * 50; // Make nebula larger than star
+      
+      gl.uniform1f(program.u_scale, glr);
+      gl.uniform1f(program.u_orientation, 0);
+      gl.uniform2fv(program.u_xyoffset, [glx, gly]);
+
+      if (star.pulsar) {
+        gl.uniform1f(program.u_ar, 1.5);
+        gl.uniform1i(program.u_hollow, 0); // false, filled
+        gl.uniform3fv(program.u_color1, [0.9, 0.8, 0.4]); // Bright yellow
+        gl.uniform3fv(program.u_color2, [1.0, 1.0, 0.9]); // Bright white
+      } else {
+        gl.uniform1f(program.u_ar, 1);
+        gl.uniform1i(program.u_hollow, 1); // true, hollow
+        gl.uniform3fv(program.u_color1, [0.1, 0.2, 0.8]); // Blue
+        gl.uniform3fv(program.u_color2, [0.8, 0.2, 0.5]); // Magenta
+      }
+      gl.drawArrays(gl.TRIANGLES,0,shapes.square.tris*3);
+    }
+  }
+  gl.disable(gl.BLEND);
+};
+
 const setRenderBuffer = () => {
   if(USE_WAVE){
     gl.bindFramebuffer(gl.FRAMEBUFFER,wave.o.fbuf);
     gl.viewport(0,0,wave.o.fbuf.width,wave.o.fbuf.height);
   } else {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0,0,SCREEN_RADIUS*2,SCREEN_RADIUS*2);
+    gl.viewport(0,0,VIEWPORT_WIDTH,VIEWPORT_WIDTH);
   }
 };
 
-var drawshape = function(shape, color, scale, orientation, xoff, yoff){
-  gl.useProgram(sprogram.simple.program);
+var drawshape = function(shape, color, scale, orientation, xoff, yoff, ar=1){
+  gl.useProgram(sprogram.ellipse.program);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   gl.bindBuffer(gl.ARRAY_BUFFER,shapes[shape].buf);
-  gl.enableVertexAttribArray(sprogram.simple.a_vertex);
-  gl.vertexAttribPointer(sprogram.simple.a_vertex,2,gl.FLOAT,false,0,0);
-  gl.uniform1f(sprogram.simple.u_scale,scale);
-  gl.uniform1f(sprogram.simple.u_orientation,orientation);
-  gl.uniform2fv(sprogram.simple.u_xyoffset,[xoff,yoff]);
-  gl.uniform4fv(sprogram.simple.u_color,color);
+  gl.enableVertexAttribArray(sprogram.ellipse.a_vertex);
+  gl.vertexAttribPointer(sprogram.ellipse.a_vertex,2,gl.FLOAT,false,0,0);
+  gl.uniform1f(sprogram.ellipse.u_scale,scale);
+  gl.uniform1f(sprogram.ellipse.u_ar,ar);
+  gl.uniform1f(sprogram.ellipse.u_orientation,orientation);
+  gl.uniform2fv(sprogram.ellipse.u_xyoffset,[xoff,yoff]);
+  gl.uniform4fv(sprogram.ellipse.u_color,color);
   gl.drawArrays(gl.TRIANGLES,0,shapes[shape].tris*3);
 }
 
@@ -1221,7 +1387,7 @@ var runprogram = function(timestamp){
   dophysics();
   debugTableValues(debugTable);
   debugTable.splice(0,debugTable.length);
-  document.getElementById('frameTime').textContent = ticklen;
+  document.getElementById('frameTime').textContent = `${(1/ticklen).toFixed(2)}fps`;
   if(!pauseNextFrame){
     //setTimeout(function(){runprogram();},tickmillis);
     requestAnimationFrame(runprogram);
@@ -1246,10 +1412,10 @@ const makeWave = (cType, x, y, radius, amplitude) => {
   if(cType == 'physics'){
     [glx,gly] = ptowave(x,y);
   }
-  glr = radius/SCREEN_RADIUS;
+  glr = radius/(PHYSICS_WIDTH/2);
   gl.bindFramebuffer(gl.FRAMEBUFFER,wave.c.fbuf);
   gl.viewport(0,0,wave.c.fbuf.width, wave.c.fbuf.height);
-  const program = sprogram.gaussian;
+  const program = sprogram.waveic;
   gl.useProgram(program.program);
   gl.bindBuffer(gl.ARRAY_BUFFER,shapes["square"].buf);
   gl.enableVertexAttribArray(program.a_vertex);
@@ -1258,7 +1424,6 @@ const makeWave = (cType, x, y, radius, amplitude) => {
   gl.uniform1f(program.u_orientation,0);
   gl.uniform1f(program.u_ar,1);
   gl.uniform2fv(program.u_xyoffset,[glx,gly]);
-  gl.uniform4fv(program.u_color,[0,0,1,1]);
   gl.uniform1f(program.u_amp, amplitude);
   gl.drawArrays(gl.TRIANGLES,0,shapes["square"].tris*3);
   //debugTable.push(['wave at', glx, gly]);
@@ -1269,6 +1434,10 @@ const makeWave = (cType, x, y, radius, amplitude) => {
 let started;
 const startgame = () => {
   started = true;
+  if(USE_WEBGL) {
+    renderGravityMap();
+    renderNebulaMap();
+  }
   runprogram();
 }
 </script>

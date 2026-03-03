@@ -12,11 +12,11 @@ void main() {
   float x = u_scale*dot(
     vec2(1.0/ar*cos(u_orientation),ar*sin(u_orientation)),
     a_vertex
-  )-u_xyoffset.x;
+  )+u_xyoffset.x;
   float y = u_scale*dot(
     vec2(1.0/ar*-sin(u_orientation),ar*cos(u_orientation)),
     a_vertex
-  )-u_xyoffset.y;
+  )+u_xyoffset.y;
   gl_Position = vec4(x,y,1,1);
   v_texCoord = a_vertex*.5+vec2(.5,.5);
 }

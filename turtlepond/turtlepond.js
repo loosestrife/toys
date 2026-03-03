@@ -107,7 +107,7 @@ sprogram["simple"] = load_shader_source("/shaders/simple2d.vert","/shaders/simpl
 sprogram["sprite"] = load_shader_source("/shaders/sprite2d.vert","/shaders/sprite.frag");
 sprogram["ellipse"] = load_shader_source("/shaders/sprite2d.vert","/shaders/circle.frag");
 sprogram["waveic"] = load_shader_source("/shaders/sprite2d.vert","/shaders/x2gaussian.frag");
-sprogram["wave_sim"] = load_shader_source("/shaders/sprite2d.vert","/shaders/wave.frag");
+sprogram["wave_sim"] = load_shader_source("/shaders/sprite2d.vert","/shaders/pond_wave.frag");
 sprogram["wave_display"] = load_shader_source("/shaders/sprite2d.vert","/shaders/pond_wave_display.frag");
 
 sprites = {turtle: {src: "/turtlepond/turtle512.png"},

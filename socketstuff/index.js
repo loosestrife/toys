@@ -41,9 +41,16 @@ sqlite.open({filename: dbPath, driver: sqlite3.Database}).then(
 const db = {};
 ['get','all','exec','run'].forEach(method=>{
   db[method] = async(sql,...args) => {
-    console.log('running sql',sql,...args);
     try {
-      return await actualDb[method](sql,...args);
+      const result = await actualDb[method](sql,...args);
+      if (method === 'run' && sql.trim().toUpperCase().startsWith('DELETE')) {
+        if (result.changes > 0) {
+          console.log('running sql', sql, ...args, `(deleted ${result.changes} rows)`);
+        }
+      } else {
+        console.log('running sql',sql,...args);
+      }
+      return result;
     } catch(err) {
       console.log('sql statement', sql, ...args);
       throw err;
@@ -195,7 +202,7 @@ statics = {
   "/fragment.html": toysDir+"fragment.html",
   "/gravity.html": toysDir+"gravity.html",
 }
-var shaders = ["simple.frag","sprite.frag","circle.frag","gaussian.frag","x2gaussian.frag","wave.frag","pond_wave_display.frag","space_wave_display.frag","simple2d.vert","sprite2d.vert"];
+var shaders = fs.readdirSync(toysDir+"shaders");
 for(var i=0; i<shaders.length; i++){
   statics["/shaders/"+shaders[i]] = toysDir+"shaders/"+shaders[i];
 }
@@ -261,7 +268,7 @@ app.post('/dropbox', async (req, res)=>{
 
 setInterval(function(){
   var lowt = Date.now() - 15 * 60 * 1000;
-  db.exec(`DELETE FROM chats WHERE time < ${lowt};`);
+  db.run(`DELETE FROM chats WHERE time < ${lowt};`);
 },60*1000);
 
 
