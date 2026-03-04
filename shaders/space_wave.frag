@@ -70,5 +70,11 @@ void main() {
   // Position update
   float b_next = b0 + g_next * dt;
 
-  gl_FragColor = vec4(0.0, g_next + 0.5, b_next + 0.5, 1.0);
+  // --- 4. GRADIENT CALCULATION for display ---
+  // Using central difference for a more accurate gradient
+  float grad_x = (R1 - L1) * 0.5;
+  float grad_y = (U1 - D1) * 0.5;
+  float grad_mag = length(vec2(grad_x, grad_y));
+
+  gl_FragColor = vec4(grad_mag, g_next + 0.5, b_next + 0.5, 1.0);
 }

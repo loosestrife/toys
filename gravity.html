@@ -334,6 +334,7 @@ window.onload = async () => {
     await Promise.all([shaderPromise,spritePromise]);
     generateGlObjs();
   }
+  document.body.appendChild(hml.p({id:'fishCount'}));
   document.body.appendChild(hml.p({id:'frameTime'}));
   startgame();
 };
@@ -996,8 +997,8 @@ var gl_drawstuff = function(){
     const [glx, gly] = ptogl(star.x, star.y);
     if (star.pulsar) {
         const beamColor = [0.9, 0.9, 1.0, 0.5]; // Faint white
-        const beamLength = 4000 * mtogl;
-        drawshape("square", beamColor, beamLength, star.orientation, glx, gly, 1/8_000_000);
+        const beamLength = 1000 * mtogl;
+        drawshape("square", beamColor, beamLength, star.orientation, glx, gly, 1/2_000_000);
     }
     drawshape("square",star.color,star.r*mtogl, 0, glx, gly);
   }
@@ -1160,7 +1161,7 @@ const renderGravityMap = () => {
 const renderNebulaMap = () => {
   gl.bindFramebuffer(gl.FRAMEBUFFER, wave.nebula.fbuf);
   gl.viewport(0,0,wave.nebula.fbuf.width, wave.nebula.fbuf.height);
-  gl.clearColor(0,0,0,1);
+  gl.clearColor(0,0,0,0);
   gl.clear(gl.COLOR_BUFFER_BIT);
   
   gl.enable(gl.BLEND);
@@ -1388,6 +1389,7 @@ var runprogram = function(timestamp){
   debugTableValues(debugTable);
   debugTable.splice(0,debugTable.length);
   document.getElementById('frameTime').textContent = `${(1/ticklen).toFixed(2)}fps`;
+  document.getElementById('fishCount').textContent = `${typelists.npc.filter(thing => thing.sprite == 'fish').length} fish`;
   if(!pauseNextFrame){
     //setTimeout(function(){runprogram();},tickmillis);
     requestAnimationFrame(runprogram);

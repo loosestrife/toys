@@ -34,22 +34,29 @@ void main() {
     mat2 m = mat2(1.6,  1.2, -1.2,  1.6);
     vec2 p = uv * 4.0;
     float f = 0.5*noise(p) + 0.25*noise(p*m) + 0.125*noise(p*m*m);
-    
-    vec3 final_color;
+
+    vec3 emission;
+    float opacity;
+
     if (u_hollow == 1) {
         // Planetary Nebula (hollow ring)
-        float density = smoothstep(1.0, 0.2, dist) * smoothstep(0.0, 0.5, dist);
-        final_color = mix(u_color1, u_color2, f) * density;
+        opacity = smoothstep(1.0, 0.2, dist) * smoothstep(0.0, 0.5, dist);
+        emission = mix(u_color1, u_color2, f) * opacity;
     } else {
         // Pulsar Wind Nebula (Crab-like)
-        // Inner green glow, brightest at center, semi-transparent
-        float inner_density = (1.0 - smoothstep(0.0, 0.7, dist)) * 0.7;
-        vec3 inner_color = vec3(0.4, 1.0, 0.5) * inner_density * (0.5 + f * 0.5);
-        // Outer, less-bright shell
-        float outer_density = smoothstep(0.4, 0.7, dist) * smoothstep(1.0, 0.9, dist);
-        vec3 outer_shell_color = mix(u_color1, u_color2, f) * 0.4 * outer_density;
-        final_color = inner_color + outer_shell_color;
+        // Inner green glow: high emission, low opacity (semi-transparent)
+        float inner_factor = (1.0 - smoothstep(0.0, 0.7, dist));
+        vec3 inner_emission = vec3(0.4, 1.0, 0.5) * inner_factor * (0.5 + f * 0.5) * 0.7;
+        float inner_opacity = inner_factor * 0.3;
+
+        // Outer filament shell: lower emission, higher opacity
+        float outer_factor = smoothstep(0.4, 0.7, dist) * smoothstep(1.0, 0.9, dist);
+        vec3 outer_emission = mix(u_color1, u_color2, f) * 0.4 * outer_factor;
+        float outer_opacity = outer_factor * 0.8;
+
+        emission = inner_emission + outer_emission;
+        opacity = 1.0 - (1.0 - inner_opacity) * (1.0 - outer_opacity);
     }
-    
-    gl_FragColor = vec4(final_color, 1.0);
+
+    gl_FragColor = vec4(emission, opacity);
 }
