@@ -200,11 +200,19 @@ var storemousepos = function(e){
 
 var addfood = function(e){
   var r = canvas.getBoundingClientRect();
-  mousex = e.clientX - r.left;
-  mousey = e.clientY - r.top;
+  var touch;
+  if (e.changedTouches) {
+    touch = e.changedTouches[0];
+    e.preventDefault();
+  } else {
+    touch = e;
+  }
+  mousex = touch.clientX - r.left;
+  mousey = touch.clientY - r.top;
+
   var foodi = {
-    x: screenwidth-mousex,
-    y: mousey,
+    x: mousex,
+    y: screenheight - mousey,
     xdot: 0,
     ydot: 0,
     r: foodradius,
@@ -284,28 +292,33 @@ var maketurtle = function(x, y){
     legs: [{attachx: 1/2*turtleradius,
             attachy: 1/6*turtleradius,
             leglen:  2/3*turtleradius,
-            sorientation: 0,
+            stdorientation: 0+.3,
             strokephase: Math.random()*2*Math.PI,
             color: turtlecolor},
            {attachx: -1/2*turtleradius,
             attachy: 1/6*turtleradius,
             leglen:  2/3*turtleradius,
-            sorientation: Math.PI,
+            stdorientation: Math.PI-.3,
             strokephase: Math.random()*2*Math.PI,
             color: turtlecolor},
            {attachx: -1/2*turtleradius,
             attachy: -5/6*turtleradius,
             leglen:  2/3*turtleradius,
-            sorientation: Math.PI,
+            stdorientation: Math.PI+.6,
             strokephase: Math.random()*2*Math.PI,
             color: turtlecolor},
            {attachx: 1/2*turtleradius,
             attachy: -5/6*turtleradius,
             leglen:  2/3*turtleradius,
-            sorientation: 0,
+            stdorientation: 0-.6,
             strokephase: Math.random()*2*Math.PI,
             color: turtlecolor}]
   };
+  turtlei.legs.forEach(leg => {
+    Object.defineProperty(leg, 'orientation', {
+      get: function() { return this.stdorientation + 1/3*Math.cos(this.strokephase); }
+    });
+  });
   turtles.push(turtlei);
 };
 
@@ -483,7 +496,6 @@ var dostuff = function(){
     }
 
     for(var j=0; j<turtles[i].legs.length; j++){
-      turtles[i].legs[j].orientation = turtles[i].legs[j].sorientation + 1/3*Math.cos(turtles[i].legs[j].strokephase);
       turtles[i].legs[j].strokephase += 1/turtlestroketicks;
       if(turtles[i].legs[j].strokephase > 2*Math.PI){
         if(turtles[i].legs[j].color != turtlecolor){
@@ -764,7 +776,7 @@ var ogl_drawsprite = function(o, sprite, xs, ys){
   gl.bindTexture(gl.TEXTURE_2D,sprite);
   gl.uniform1i(sprogram.sprite.u_tex,0);
   gl.uniform2fv(sprogram.sprite.u_xyoffset,[xtogl(o.x),ytogl(o.y)]);
-  gl.uniform1f(sprogram.sprite.u_orientation,-o.direction+Math.PI);
+  gl.uniform1f(sprogram.sprite.u_orientation,-o.direction);
   gl.uniform1f(sprogram.sprite.u_scale,xs*ys*o.r/screenwidth); // xs*ys*o.r/screenwidth
   gl.uniform1f(sprogram.sprite.u_ar,(xs/ys)*(xs/ys));
   gl.bindBuffer(gl.ARRAY_BUFFER,shapes.square.buf);
@@ -775,6 +787,8 @@ var ogl_drawsprite = function(o, sprite, xs, ys){
 
 var ogl_drawturtlelegs = function(turtle){
   gl.useProgram(sprogram.ellipse.program);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  gl.enable(gl.BLEND);
   gl.bindBuffer(gl.ARRAY_BUFFER,shapes.square.buf);
   gl.enableVertexAttribArray(sprogram.ellipse.a_vertex);
   gl.vertexAttribPointer(sprogram.ellipse.a_vertex, 2, gl.FLOAT, false, 0, 0);
@@ -787,9 +801,9 @@ var ogl_drawturtlelegs = function(turtle){
     var midx = xtogl(turtle.x+ c*offx - s*offy);
     var midy = ytogl(turtle.y+ s*offx + c*offy);
     gl.uniform2fv(sprogram.ellipse.u_xyoffset,[midx,midy]);
-    gl.uniform1f(sprogram.ellipse.u_orientation,-turtle.direction-leg.orientation)
-    gl.uniform1f(sprogram.ellipse.u_scale,leg.leglen/screenwidth);
-    gl.uniform1f(sprogram.ellipse.u_ar,1.5);
+    gl.uniform1f(sprogram.ellipse.u_orientation,-turtle.direction+Math.PI/2-leg.orientation);
+    gl.uniform1f(sprogram.ellipse.u_scale,leg.leglen/screenwidth/1.5);
+    gl.uniform1f(sprogram.ellipse.u_ar,.6);
     gl.uniform4fv(sprogram.ellipse.u_color,leg.color);
     gl.drawArrays(gl.TRIANGLES,0,6);
 
@@ -905,6 +919,7 @@ var wavesim = function(){
   gl.uniform2fv(sprogram.wave_sim.u_xyoffset,[0,0]);
   gl.uniform1f(sprogram.wave_sim.u_tick,.05);
   gl.uniform1f(sprogram.wave_sim.u_pxc,wave.c.fbuf.width);
+  gl.uniform1f(sprogram.wave_sim.u_sand,sandradius/screenwidth);
   gl.drawArrays(gl.TRIANGLES,0,6);
 
   drawtexture(wave.n.tex, wave.c.fbuf);
@@ -935,6 +950,7 @@ var wave = {};
 var setup_drawing = function(){
   gl = canvas.getContext("webgl");
   gl.getExtension("OES_texture_float");
+  gl.getExtension("OES_standard_derivatives");
   for(key in sprogram){
     sprogram[key] = load_shader_program(sprogram[key].frag,sprogram[key].vert);
   }

@@ -9,7 +9,12 @@ void main() {
   vec4 f = texture2D(u_fb,v_texCoord);
   vec4 w = texture2D(u_wave,v_texCoord);
   if(distance(f.rgb,u_background.rgb) < .01)
-    gl_FragColor = vec4(f.r,f.g,f.b+5.0*(w.b-.5),1.0);
+    gl_FragColor = vec4(
+      f.r,
+      f.g,
+      f.b-pow(atan(w.r)*2.0/3.141592653589793,1.0/3.5),
+      1.0
+    );
   else
-    gl_FragColor = f;
+    gl_FragColor = vec4(f.rgb * (1.0 - w.r * 0.5), 1.0);
 }
