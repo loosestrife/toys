@@ -52,7 +52,8 @@ void main() {
   vec2 distFromCenter = abs(v_texCoord - 0.5) * 2.0;
   float maxDist = max(distFromCenter.x, distFromCenter.y);
   float waterLimit = 1.0 - (2.0 * u_sand);
-  float mask = 1.0 - smoothstep(waterLimit, 1.0, maxDist);
+  // Sharpen the transition to create a better reflection boundary
+  float mask = 1.0 - smoothstep(waterLimit, waterLimit + 0.05, maxDist);
 
   float dt = 0.45;
   float k  = mix(0.4, 1.2, mask); // Speed boost (lower in sand for reflection)
@@ -85,5 +86,12 @@ void main() {
   // As requested, use red channel for either wetness (sand) or gradient (water)
   float display_value = mix(wetness, grad_mag, mask);
 
-  gl_FragColor = vec4(display_value, g_next + 0.5, b_next + 0.5, 1.0);
+  // --- 6. BOUNDARY CONDITION ---
+  // Hard wall at the very edge of the simulation texture to contain energy.
+  // This stops waves from "piling up" at the texture edge.
+  if (maxDist >= 1.0 - 2.0*p) { // A few pixels in to be safe
+    gl_FragColor = vec4(0.0, 0.5, 0.5, 1.0); // Clamp to zero state
+  } else {
+    gl_FragColor = vec4(display_value, g_next + 0.5, b_next + 0.5, 1.0);
+  }
 }

@@ -28,6 +28,7 @@ var fish_submerge_color = [0,32/256,64/256,1];
 var fish_surface_color = [0,64/256,128/256,1];
 var sandcolor = [200/256,150/256,0,1];
 var watercolor = [0,64/256,255/256,1];
+var leg_wiggle = {pectoral: 1/3, pelvic: 2/3};
 
 
 var turtles = [];
@@ -294,29 +295,33 @@ var maketurtle = function(x, y){
             leglen:  2/3*turtleradius,
             stdorientation: 0+.3,
             strokephase: Math.random()*2*Math.PI,
+            type: 'pectoral',
             color: turtlecolor},
            {attachx: -1/2*turtleradius,
             attachy: 1/6*turtleradius,
             leglen:  2/3*turtleradius,
             stdorientation: Math.PI-.3,
             strokephase: Math.random()*2*Math.PI,
+            type: 'pectoral',
             color: turtlecolor},
            {attachx: -1/2*turtleradius,
             attachy: -5/6*turtleradius,
             leglen:  2/3*turtleradius,
             stdorientation: Math.PI+.6,
             strokephase: Math.random()*2*Math.PI,
+            type: 'pelvic',
             color: turtlecolor},
            {attachx: 1/2*turtleradius,
             attachy: -5/6*turtleradius,
             leglen:  2/3*turtleradius,
             stdorientation: 0-.6,
             strokephase: Math.random()*2*Math.PI,
+            type: 'pelvic',
             color: turtlecolor}]
   };
   turtlei.legs.forEach(leg => {
     Object.defineProperty(leg, 'orientation', {
-      get: function() { return this.stdorientation + 1/3*Math.cos(this.strokephase); }
+      get: function() { return this.stdorientation + leg_wiggle[this.type]*Math.cos(this.strokephase); }
     });
   });
   turtles.push(turtlei);
@@ -838,6 +843,25 @@ var ogl_drawstuff = function(){
   gl.uniform4fv(sprogram.simple.u_color,watercolor);
   gl.drawArrays(gl.TRIANGLES,0,6);
 
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  gl.viewport(0,0,screenwidth,screenheight);
+  gl.useProgram(sprogram.wave_display.program);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D,wave.o.tex);
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D,wave.c.tex);
+  gl.uniform1i(sprogram.wave_display.u_fb,0);
+  gl.uniform1i(sprogram.wave_display.u_wave,1);
+  gl.uniform4fv(sprogram.wave_display.u_background,watercolor);
+  gl.bindBuffer(gl.ARRAY_BUFFER,shapes.square.buf);
+  gl.enableVertexAttribArray(sprogram.wave_display.a_vertex);
+  gl.vertexAttribPointer(sprogram.wave_display.a_vertex,2,gl.FLOAT,false,0,0);
+  gl.uniform1f(sprogram.wave_display.u_scale,1);
+  gl.uniform1f(sprogram.wave_display.u_orientation,0);
+  gl.uniform1f(sprogram.wave_display.u_ar,1);
+  gl.uniform2fv(sprogram.wave_display.u_xyoffset,[0,0]);
+  gl.drawArrays(gl.TRIANGLES,0,6);
+
   for(var i=0; i<fishs.length; i++){
     if(fishs[i].surfaced){
       if(!sprites.fish.tex)
@@ -869,28 +893,7 @@ var ogl_drawstuff = function(){
   for(var i=0; i<foods.length; i++)
     ogl_drawblob(foods[i]);
 
-
-
   //drawtexture(wave.o.tex,null);
-
-  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
-  gl.viewport(0,0,screenwidth,screenheight);
-  gl.useProgram(sprogram.wave_display.program);
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D,wave.o.tex);
-  gl.activeTexture(gl.TEXTURE1);
-  gl.bindTexture(gl.TEXTURE_2D,wave.c.tex);
-  gl.uniform1i(sprogram.wave_display.u_fb,0);
-  gl.uniform1i(sprogram.wave_display.u_wave,1);
-  gl.uniform4fv(sprogram.wave_display.u_background,watercolor);
-  gl.bindBuffer(gl.ARRAY_BUFFER,shapes.square.buf);
-  gl.enableVertexAttribArray(sprogram.wave_display.a_vertex);
-  gl.vertexAttribPointer(sprogram.wave_display.a_vertex,2,gl.FLOAT,false,0,0);
-  gl.uniform1f(sprogram.wave_display.u_scale,1);
-  gl.uniform1f(sprogram.wave_display.u_orientation,0);
-  gl.uniform1f(sprogram.wave_display.u_ar,1);
-  gl.uniform2fv(sprogram.wave_display.u_xyoffset,[0,0]);
-  gl.drawArrays(gl.TRIANGLES,0,6);
 };
 
 
