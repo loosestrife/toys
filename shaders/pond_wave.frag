@@ -5,6 +5,7 @@ precision highp float;
 uniform sampler2D u_u;
 uniform float u_pxc;
 uniform float u_sand;
+uniform float u_damping;
 varying vec2 v_texCoord;
 
 void main() {
@@ -57,7 +58,7 @@ void main() {
 
   float dt = 0.45;
   float k  = mix(0.4, 1.2, mask); // Speed boost (lower in sand for reflection)
-  float damping = mix(0.97, 0.99, mask); // Damping (less absorption in sand allows sloshing)
+  float damping = mix(u_damping * 0.98, u_damping, mask); // Damping (less absorption in sand allows sloshing)
   
   // --- 3. INTEGRATION WITH MOMENTUM CONSERVATION ---
   // We apply the Laplacian AND the restoring force to the velocity

@@ -922,6 +922,7 @@ var wavesim = function(){
   gl.uniform1f(sprogram.wave_sim.u_orientation,0);
   gl.uniform2fv(sprogram.wave_sim.u_xyoffset,[0,0]);
   gl.uniform1f(sprogram.wave_sim.u_tick,.05);
+  gl.uniform1f(sprogram.wave_sim.u_damping,wave.damping);
   gl.uniform1f(sprogram.wave_sim.u_pxc,wave.c.fbuf.width);
   gl.uniform1f(sprogram.wave_sim.u_sand,sandradius/screenwidth);
   gl.drawArrays(gl.TRIANGLES,0,6);
@@ -995,12 +996,15 @@ var setup_drawing = function(){
       if (float_texture_ext) {
         console.log("Using floating point textures");
         ttype = gl.FLOAT;
+        wave.damping = 0.996;
       } else if (half_float_texture_ext) {
         console.log("Falling back to half floating point textures");
         ttype = half_float_texture_ext.HALF_FLOAT_OES;
+        wave.damping = 0.98;
       } else {
         console.log("Falling back to 8bit textures");
         ttype = gl.UNSIGNED_BYTE;
+        wave.damping = 0.88;
       }
     } else {
       var ttype = gl.UNSIGNED_BYTE;
