@@ -68,7 +68,7 @@ var load_shader_source = function(furl,vurl){
   ajax_load_shader(o,"vert",vurl);
   return o;
 }
-var load_shader_program = function(vss,fss){
+var load_shader_program = function(vss,fss,defs){
   var vshader = gl.createShader(gl.VERTEX_SHADER);
   gl.shaderSource(vshader, vss);
   gl.compileShader(vshader);
@@ -78,7 +78,7 @@ var load_shader_program = function(vss,fss){
   }
   var fshader = gl.createShader(gl.FRAGMENT_SHADER);
   var prefix = "#ifdef GL_ES\nprecision highp float;\n#endif\n";
-  gl.shaderSource(fshader, prefix + fss);
+  gl.shaderSource(fshader, prefix + (defs||"") + fss);
   gl.compileShader(fshader);
   if(!gl.getShaderParameter(fshader, gl.COMPILE_STATUS)){
   	console.log("Error in " + fss);
@@ -958,8 +958,13 @@ var setup_drawing = function(){
   var half_float_texture_ext = gl.getExtension("OES_texture_half_float");
   gl.getExtension("EXT_color_buffer_half_float");
   gl.getExtension("OES_standard_derivatives");
+  var wave_defs = "";
+  if(!float_texture_ext && !half_float_texture_ext)
+    wave_defs = "#define LOW_PRECISION\n";
+
   for(key in sprogram){
-    sprogram[key] = load_shader_program(sprogram[key].frag,sprogram[key].vert);
+    var defs = (key == "wave_sim") ? wave_defs : "";
+    sprogram[key] = load_shader_program(sprogram[key].frag,sprogram[key].vert,defs);
   }
   offscreen_canvas = document.createElement("canvas");
   while(totex.length > 0){

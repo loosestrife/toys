@@ -33,12 +33,16 @@ void main() {
   float BL = texture2D(u_u, vec2(x-p, y-p)).b - 0.5;
 
 // --- 1. PRECISE LAPLACIAN (Sum = 0) ---
+#ifdef LOW_PRECISION
+  float lap = L1 + R1 + U1 + D1 - 4.0*C;
+#else
   // We ensure the center weight (30+30) perfectly balances the neighbors (16+16-1-1)
   float uxx = (-L2 + 16.0*L1 - 30.0*C + 16.0*R1 - R2) / 12.0;
   float uyy = (-D2 + 16.0*D1 - 30.0*C + 16.0*U1 - U2) / 12.0;
   float lapDiag = (TL + TR + BL + BR - 4.0*C) / 4.0;
 
   float lap = mix(uxx + uyy, lapDiag, 0.2);
+#endif
 
   // --- 2. THE DC LEVEL FIX (Restoring Force) ---
   // This "Spring to Equilibrium" prevents the pond level from drifting.
@@ -79,8 +83,13 @@ void main() {
   // Using a 4th-order central difference for a more accurate gradient,
   // which uses the wider support you asked for.
   // f'(x) ≈ (f(x-2h) - 8f(x-h) + 8f(x+h) - f(x+2h)) / 12h
+#ifdef LOW_PRECISION
+  float grad_x = (R1 - L1) * 0.5;
+  float grad_y = (U1 - D1) * 0.5;
+#else
   float grad_x = (L2 - 8.0*L1 + 8.0*R1 - R2) / 12.0;
   float grad_y = (D2 - 8.0*D1 + 8.0*U1 - U2) / 12.0;
+#endif
   float grad_mag = length(vec2(grad_x, grad_y));
 
   // --- 5. COMBINED DISPLAY VALUE ---
