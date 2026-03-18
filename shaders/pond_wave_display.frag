@@ -11,6 +11,10 @@ void main() {
   float display_val = w.r; // grad_mag on water, wetness on sand
   float wave_height = w.b - 0.5;
 
+#ifdef LOW_PRECISION
+  if(display_val < 0.015) display_val = 0.0;
+#endif
+
   bool is_water_pixel = distance(f.rgb, u_background.rgb) < 0.01;
 
   if(is_water_pixel) {

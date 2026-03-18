@@ -963,7 +963,7 @@ var setup_drawing = function(){
     wave_defs = "#define LOW_PRECISION\n";
 
   for(key in sprogram){
-    var defs = (key == "wave_sim") ? wave_defs : "";
+    var defs = (key == "wave_sim" || key == "wave_display") ? wave_defs : "";
     sprogram[key] = load_shader_program(sprogram[key].frag,sprogram[key].vert,defs);
   }
   offscreen_canvas = document.createElement("canvas");
