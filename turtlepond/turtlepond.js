@@ -1005,11 +1005,11 @@ var setup_drawing = function(){
       } else if (half_float_texture_ext) {
         console.log("Falling back to half floating point textures");
         ttype = half_float_texture_ext.HALF_FLOAT_OES;
-        wave.damping = 0.98;
+        wave.damping = 0.99;
       } else {
         console.log("Falling back to 8bit textures");
         ttype = gl.UNSIGNED_BYTE;
-        wave.damping = 0.98;
+        wave.damping = 0.99;
       }
     } else {
       var ttype = gl.UNSIGNED_BYTE;
