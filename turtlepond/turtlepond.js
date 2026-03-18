@@ -952,7 +952,8 @@ var make_wave = function(ix,iy,ir,amp){
 var wave = {};
 var setup_drawing = function(){
   gl = canvas.getContext("webgl");
-  gl.getExtension("OES_texture_float");
+  var float_texture_ext = gl.getExtension("OES_texture_float");
+  var half_float_texture_ext = gl.getExtension("OES_texture_half_float");
   gl.getExtension("OES_standard_derivatives");
   for(key in sprogram){
     sprogram[key] = load_shader_program(sprogram[key].frag,sprogram[key].vert);
@@ -988,7 +989,14 @@ var setup_drawing = function(){
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     if(txx[i] == "c" || txx[i] == "n"){
-      var ttype = gl.FLOAT;
+      var ttype;
+      if (float_texture_ext) {
+        ttype = gl.FLOAT;
+      } else if (half_float_texture_ext) {
+        ttype = half_float_texture_ext.HALF_FLOAT_OES;
+      } else {
+        ttype = gl.UNSIGNED_BYTE;
+      }
     } else {
       var ttype = gl.UNSIGNED_BYTE;
     }
