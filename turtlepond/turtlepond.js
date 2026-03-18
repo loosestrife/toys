@@ -1009,7 +1009,7 @@ var setup_drawing = function(){
       } else {
         console.log("Falling back to 8bit textures");
         ttype = gl.UNSIGNED_BYTE;
-        wave.damping = 0.88;
+        wave.damping = 0.96;
       }
     } else {
       var ttype = gl.UNSIGNED_BYTE;
