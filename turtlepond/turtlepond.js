@@ -77,7 +77,8 @@ var load_shader_program = function(vss,fss){
     console.log(gl.getShaderInfoLog(vshader));
   }
   var fshader = gl.createShader(gl.FRAGMENT_SHADER);
-  gl.shaderSource(fshader, fss);
+  var prefix = "#ifdef GL_ES\nprecision highp float;\n#endif\n";
+  gl.shaderSource(fshader, prefix + fss);
   gl.compileShader(fshader);
   if(!gl.getShaderParameter(fshader, gl.COMPILE_STATUS)){
   	console.log("Error in " + fss);
@@ -954,6 +955,7 @@ var setup_drawing = function(){
   gl = canvas.getContext("webgl");
   var float_texture_ext = gl.getExtension("OES_texture_float");
   var half_float_texture_ext = gl.getExtension("OES_texture_half_float");
+  gl.getExtension("EXT_color_buffer_half_float");
   gl.getExtension("OES_standard_derivatives");
   for(key in sprogram){
     sprogram[key] = load_shader_program(sprogram[key].frag,sprogram[key].vert);
