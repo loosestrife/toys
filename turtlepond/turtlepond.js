@@ -993,10 +993,13 @@ var setup_drawing = function(){
     if(txx[i] == "c" || txx[i] == "n"){
       var ttype;
       if (float_texture_ext) {
+        console.log("Using floating point textures");
         ttype = gl.FLOAT;
       } else if (half_float_texture_ext) {
+        console.log("Falling back to half floating point textures");
         ttype = half_float_texture_ext.HALF_FLOAT_OES;
       } else {
+        console.log("Falling back to 8bit textures");
         ttype = gl.UNSIGNED_BYTE;
       }
     } else {
