@@ -201,6 +201,7 @@ statics = {
   "/fractal-webgl.html": toysDir+"fractal-webgl.html",
   "/fragment.html": toysDir+"fragment.html",
   "/gravity.html": toysDir+"gravity.html",
+  "/fonts/KJV1611.otf": toysDir+"socketstuff/KJV1611.otf",
 }
 var shaders = fs.readdirSync(toysDir+"shaders");
 for(var i=0; i<shaders.length; i++){

@@ -12,35 +12,25 @@
 { color: grey;
   font-size: small;
 }
+
+@font-face {
+  font-family: 'KJV1611';
+  src: url('fonts/KJV1611.otf') format('opentype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+body {
+  font-family: 'KJV1611', 'Comic Sans MS';
+}
 </style>
-<script type="text/javascript">
-var pond = document.createElement("script");
-pond.type = "text/javascript";
-pond.src = "turtlepond.js";
-pond.onload = function(){
-  var screen = document.getElementById("turtlepond-screen");
-  startturtlepond(500,500,screen);
-};
-document.getElementsByTagName("head")[0].appendChild(pond);
-</script>
-<script type="text/javascript">
-var chatclientjs = document.createElement("script");
-chatclientjs.type = "text/javascript";
-chatclientjs.src = "chatclient.js";
-chatclientjs.onload = function(){
-  var chatline = document.getElementById("chatline");
-  var chats = document.getElementById("chats");
-  chatclient(chatline, chats);
-};
-document.getElementsByTagName("head")[0].appendChild(chatclientjs);
-</script>
 </head>
 <body>
-<p><h1>Hello and welcome to my web site :)</h1></p>
-<p><h2>click to feed the turtles</h2></p>
+<h1>Hello and welcome to my web site :)</h1>
+<h2>click to feed the turtles</h2>
 <p>don't feed them too much, there is limited space</p>
 <div class="turtlepond">
-  <canvas id="turtlepond-screen"/>
+  <canvas id="turtlepond-screen"></canvas>
 </div>
 <div>
   <p><a href="domtetris.html">play tetris</a></p>
@@ -55,6 +45,26 @@ document.getElementsByTagName("head")[0].appendChild(chatclientjs);
 <div>
   <input id="chatline" type="text"/>
 </div>
-<div id="chats"/>
+<div id="chats"></div>
+<script type="text/javascript">
+var pond = document.createElement("script");
+pond.type = "text/javascript";
+pond.src = "turtlepond.js";
+pond.onload = function(){
+  var screen = document.getElementById("turtlepond-screen");
+  startturtlepond(500,500,screen);
+};
+document.body.appendChild(pond);
+
+var chatclientjs = document.createElement("script");
+chatclientjs.type = "text/javascript";
+chatclientjs.src = "chatclient.js";
+chatclientjs.onload = function(){
+  var chatline = document.getElementById("chatline");
+  var chats = document.getElementById("chats");
+  chatclient(chatline, chats);
+};
+document.body.appendChild(chatclientjs);
+</script>
 </body>
 </html>
