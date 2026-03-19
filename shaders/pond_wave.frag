@@ -33,16 +33,12 @@ void main() {
   float BL = texture2D(u_u, vec2(x-p, y-p)).b - 0.5;
 
 // --- 1. PRECISE LAPLACIAN (Sum = 0) ---
-#ifdef LOW_PRECISION
-  float lap = L1 + R1 + U1 + D1 - 4.0*C;
-#else
-  // We ensure the center weight (30+30) perfectly balances the neighbors (16+16-1-1)
-  float uxx = (-L2 + 16.0*L1 - 30.0*C + 16.0*R1 - R2) / 12.0;
-  float uyy = (-D2 + 16.0*D1 - 30.0*C + 16.0*U1 - U2) / 12.0;
-  float lapDiag = (TL + TR + BL + BR - 4.0*C) / 4.0;
-
-  float lap = mix(uxx + uyy, lapDiag, 0.2);
-#endif
+  // 13-point Laplacian using a Gaussian-like smoothing kernel for "visually appealing" ripples
+  // Weights: Center -28, Neighbors 4, Diagonals 2, Far Neighbors 1
+  float lap1 = L1 + R1 + U1 + D1;
+  float lap2 = TL + TR + BL + BR;
+  float lap3 = L2 + R2 + U2 + D2;
+  float lap = (4.0 * lap1 + 2.0 * lap2 + 1.0 * lap3 - 28.0 * C) / 8.0;
 
   // --- 2. THE DC LEVEL FIX (Restoring Force) ---
   // This "Spring to Equilibrium" prevents the pond level from drifting.
