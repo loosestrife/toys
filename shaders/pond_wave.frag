@@ -84,8 +84,10 @@ void main() {
   // which uses the wider support you asked for.
   // f'(x) ≈ (f(x-2h) - 8f(x-h) + 8f(x+h) - f(x+2h)) / 12h
 #ifdef LOW_PRECISION
-  float grad_x = (R1 - L1) * 0.5;
-  float grad_y = (U1 - D1) * 0.5;
+  // Least squares 2nd order polynomial fit (Savitzky-Golay)
+  // f'(0) = (-2*f(-2) - f(-1) + f(1) + 2*f(2)) / 10
+  float grad_x = (2.0*R2 + R1 - L1 - 2.0*L2) / 10.0;
+  float grad_y = (2.0*U2 + U1 - D1 - 2.0*D2) / 10.0;
 #else
   float grad_x = (L2 - 8.0*L1 + 8.0*R1 - R2) / 12.0;
   float grad_y = (D2 - 8.0*D1 + 8.0*U1 - U2) / 12.0;
