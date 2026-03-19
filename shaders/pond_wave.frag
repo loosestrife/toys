@@ -6,6 +6,7 @@ uniform sampler2D u_u;
 uniform float u_pxc;
 uniform float u_sand;
 uniform float u_damping;
+uniform float u_tension;
 varying vec2 v_texCoord;
 
 void main() {
@@ -69,6 +70,7 @@ void main() {
   
   // Position update
   float b_next = b0 + g_next * dt;
+  b_next += lap * u_tension;
 
   // Wetness calculation: decay and add wave height
   wetness *= 0.98; // Dry a bit faster
